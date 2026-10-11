@@ -67,7 +67,7 @@
             <a href="group.jsp" class="sidebar-link">Group By</a>
             <a href="charts.jsp" class="sidebar-link">Visualize Charts</a>
             <a href="correlation.jsp" class="sidebar-link">Correlation</a>
-            <a href="regression.jsp" class="sidebar-link">Linear Regression</a>
+            <a href="onehot.jsp" class="sidebar-link">One-Hot Encoding</a>
 
             <div class="sidebar-title">Dataset History</div>
             <% if (fileHistory.isEmpty()) { %>
@@ -193,8 +193,8 @@
                             <p>Compute Pearson correlation coefficient (r) between two numerical columns with scatter plots.</p>
                         </div>
                         <div class="feature-item">
-                            <h3><a href="regression.jsp">Linear Regression</a></h3>
-                            <p>Fit simple linear regression y = mx + c, compute slope, intercept, R², and live predictions.</p>
+                            <h3><a href="onehot.jsp">One-Hot Encoding</a></h3>
+                            <p>Convert categorical columns into binary indicator columns (0 or 1) with preview and dataset update.</p>
                         </div>
                         <div class="feature-item">
                             <h3><a href="history.jsp">History &amp; Datasets</a></h3>

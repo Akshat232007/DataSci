@@ -602,3 +602,123 @@ select.form-control {
     color: #64748b;
     background-color: #ffffff;
 }
+
+/* ============================================================
+   Responsive Breakpoints: Mobile (360px+), Tablet (768px), Desktop (1366px+)
+   ============================================================ */
+
+@media (max-width: 900px) {
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+    .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar {
+        padding: 10px 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .nav-menu {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .app-container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .sidebar .btn-new-chat {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+
+    .sidebar .sidebar-title {
+        width: 100%;
+        margin-top: 8px;
+        margin-bottom: 4px;
+    }
+
+    .sidebar .sidebar-link,
+    .sidebar .sidebar-history-item {
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        margin-bottom: 0;
+        font-size: 12px;
+    }
+
+    .sidebar .sidebar-link.active {
+        background-color: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .main-content {
+        padding: 14px 12px;
+        min-width: 0;
+    }
+
+    .stat-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .box-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .auth-box {
+        width: 100%;
+        max-width: 400px;
+        margin: 0 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stat-row {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-title {
+        font-size: 20px;
+    }
+
+    .auth-page {
+        padding: 20px 10px;
+    }
+
+    .auth-box {
+        padding: 18px 14px;
+    }
+
+    .table-responsive {
+        max-height: 400px;
+    }
+}

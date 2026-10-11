@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @WebServlet("/Data")
@@ -71,6 +72,10 @@ public class Data extends HttpServlet {
                 handleCorrelation(request, response, session, userId);
             } else if ("regression".equalsIgnoreCase(action)) {
                 handleRegression(request, response, session, userId);
+            } else if ("encode".equalsIgnoreCase(action)) {
+                handleEncode(request, response, session, userId);
+            } else if ("saveEncoded".equalsIgnoreCase(action)) {
+                handleSaveEncoded(request, response, session, userId);
             } else if ("openFile".equalsIgnoreCase(action) || "openDataset".equalsIgnoreCase(action)) {
                 handleOpenFile(request, response, session, userId);
             } else if ("newUpload".equalsIgnoreCase(action)) {
@@ -185,6 +190,10 @@ public class Data extends HttpServlet {
                 return;
             }
             int filled = CleanData.fillMissingWithMean(headers, rows, column);
+            if (filled == -1) {
+                response.sendRedirect("clean.jsp?error=" + java.net.URLEncoder.encode("Column '" + column + "' contains no valid numerical values to calculate mean.", "UTF-8"));
+                return;
+            }
             message = "Filled " + filled + " missing value(s) in '" + column + "' using the column mean.";
             Database.logHistory(userId, "Filled missing values with mean", message);
         } else if ("fillMedian".equalsIgnoreCase(cleanOp)) {
@@ -193,6 +202,10 @@ public class Data extends HttpServlet {
                 return;
             }
             int filled = CleanData.fillMissingWithMedian(headers, rows, column);
+            if (filled == -1) {
+                response.sendRedirect("clean.jsp?error=" + java.net.URLEncoder.encode("Column '" + column + "' contains no valid numerical values to calculate median.", "UTF-8"));
+                return;
+            }
             message = "Filled " + filled + " missing value(s) in '" + column + "' using the column median.";
             Database.logHistory(userId, "Filled missing values with median", message);
         } else if ("fillMode".equalsIgnoreCase(cleanOp)) {
@@ -201,7 +214,11 @@ public class Data extends HttpServlet {
                 return;
             }
             int filled = CleanData.fillMissingWithMode(headers, rows, column);
-            message = "Filled " + filled + " missing value(s) in '" + column + "' using the column mode.";
+            if (filled == -1) {
+                response.sendRedirect("clean.jsp?error=" + java.net.URLEncoder.encode("Column '" + column + "' contains no valid categorical values to calculate mode.", "UTF-8"));
+                return;
+            }
+            message = "Filled " + filled + " missing value(s) in '" + column + "' using the column mode (first seen on ties).";
             Database.logHistory(userId, "Filled missing values with mode", message);
         } else if ("removeDuplicates".equalsIgnoreCase(cleanOp)) {
             int before = rows.size();
@@ -221,7 +238,7 @@ public class Data extends HttpServlet {
                 message = "Renamed column '" + column + "' to '" + newName.trim() + "'.";
                 Database.logHistory(userId, "Renamed column", message);
             } else {
-                response.sendRedirect("clean.jsp?error=Could not rename column.");
+                response.sendRedirect("clean.jsp?error=" + java.net.URLEncoder.encode("Could not rename column. Ensure new name is non-empty and does not duplicate an existing column.", "UTF-8"));
                 return;
             }
         } else if ("deleteColumn".equalsIgnoreCase(cleanOp)) {
@@ -239,7 +256,15 @@ public class Data extends HttpServlet {
             }
         }
 
-        // Sync modified dataset back to disk file
+        // Prevent stale results from previous operations
+        session.removeAttribute("filtered_rows");
+        session.removeAttribute("filter_info");
+        session.removeAttribute("correlation_result");
+        session.removeAttribute("group_result");
+        session.removeAttribute("encoded_rows");
+        session.removeAttribute("encoded_headers");
+
+        // Sync modified dataset back to working disk file
         if (filePath != null) {
             ReadData.writeCSV(filePath, headers, (List<List<String>>) session.getAttribute("dataset_rows"));
         }
@@ -428,21 +453,43 @@ public class Data extends HttpServlet {
         String colX = request.getParameter("colX");
         String colY = request.getParameter("colY");
 
-        if (colX == null || colY == null || colX.isEmpty() || colY.isEmpty()) {
+        if (colX == null || colY == null || colX.trim().isEmpty() || colY.trim().isEmpty()) {
             response.sendRedirect("correlation.jsp?error=Please select both X and Y columns.");
+            return;
+        }
+
+        colX = colX.trim();
+        colY = colY.trim();
+
+        if (colX.equals(colY)) {
+            response.sendRedirect("correlation.jsp?error=Please select two distinct numerical columns.");
+            return;
+        }
+
+        List<String> numCols = ReadData.getNumericalColumns(headers, rows);
+        if (!numCols.contains(colX) || !numCols.contains(colY)) {
+            response.sendRedirect("correlation.jsp?error=Both selected columns must be numerical.");
             return;
         }
 
         Correlation.CorrelationResult result = Correlation.calculate(headers, rows, colX, colY);
         session.setAttribute("correlation_result", result);
 
-        Database.logHistory(userId, "Calculated correlation", "Pearson correlation between " + colX + " and " + colY + ": r = " + String.format("%.4f", result.correlation));
+        String logMsg = result.isDefined 
+            ? ("Pearson correlation between " + colX + " and " + colY + ": r = " + String.format("%.4f", result.correlation))
+            : ("Pearson correlation between " + colX + " and " + colY + ": " + result.rangeDescription);
+        Database.logHistory(userId, "Calculated correlation", logMsg);
         response.sendRedirect("correlation.jsp");
     }
 
-    @SuppressWarnings("unchecked")
     private void handleRegression(HttpServletRequest request, HttpServletResponse response, 
                                   HttpSession session, int userId) throws IOException {
+        response.sendRedirect("home.jsp?error=" + java.net.URLEncoder.encode("The Linear Regression feature is currently postponed.", "UTF-8"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleEncode(HttpServletRequest request, HttpServletResponse response, 
+                              HttpSession session, int userId) throws IOException {
         List<String> headers = (List<String>) session.getAttribute("dataset_headers");
         List<List<String>> rows = (List<List<String>>) session.getAttribute("dataset_rows");
 
@@ -451,19 +498,49 @@ public class Data extends HttpServlet {
             return;
         }
 
-        String colX = request.getParameter("colX");
-        String colY = request.getParameter("colY");
-
-        if (colX == null || colY == null || colX.isEmpty() || colY.isEmpty()) {
-            response.sendRedirect("regression.jsp?error=Please select both X and Y columns.");
+        String[] selectedCols = request.getParameterValues("columns");
+        if (selectedCols == null || selectedCols.length == 0) {
+            response.sendRedirect("onehot.jsp?error=Please select at least one categorical column to encode.");
             return;
         }
 
-        Regression.RegressionResult result = Regression.calculate(headers, rows, colX, colY);
-        session.setAttribute("regression_result", result);
+        List<String> targetList = Arrays.asList(selectedCols);
+        OneHotEncoding.EncodingResult result = OneHotEncoding.encode(headers, rows, targetList);
 
-        Database.logHistory(userId, "Performed linear regression", "X: " + colX + ", Y: " + colY + " | Equation: " + result.equation + " | R² = " + String.format("%.4f", result.rSquared));
-        response.sendRedirect("regression.jsp");
+        if (!result.success) {
+            response.sendRedirect("onehot.jsp?error=" + java.net.URLEncoder.encode(result.message, "UTF-8"));
+            return;
+        }
+
+        session.setAttribute("encoded_result", result);
+        Database.logHistory(userId, "One-Hot Encoding", result.message);
+        response.sendRedirect("onehot.jsp?msg=" + java.net.URLEncoder.encode(result.message, "UTF-8"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleSaveEncoded(HttpServletRequest request, HttpServletResponse response, 
+                                  HttpSession session, int userId) throws IOException {
+        OneHotEncoding.EncodingResult result = (OneHotEncoding.EncodingResult) session.getAttribute("encoded_result");
+        String filePath = (String) session.getAttribute("current_file_path");
+
+        if (result != null && result.success) {
+            session.setAttribute("dataset_headers", new ArrayList<>(result.encodedHeaders));
+            session.setAttribute("dataset_rows", new ArrayList<>(result.encodedRows));
+            session.removeAttribute("encoded_result");
+            session.removeAttribute("filtered_rows");
+            session.removeAttribute("filter_info");
+            session.removeAttribute("group_result");
+            session.removeAttribute("correlation_result");
+
+            if (filePath != null) {
+                ReadData.writeCSV(filePath, result.encodedHeaders, result.encodedRows);
+            }
+
+            Database.logHistory(userId, "Saved One-Hot Encoded Dataset", "Working dataset updated to " + result.encodedColumnCount + " columns");
+            response.sendRedirect("home.jsp?msg=" + java.net.URLEncoder.encode("Encoded dataset saved as current working dataset.", "UTF-8"));
+        } else {
+            response.sendRedirect("onehot.jsp?error=No encoded dataset found to save.");
+        }
     }
 
     private void handleOpenFile(HttpServletRequest request, HttpServletResponse response, 

@@ -65,7 +65,7 @@
             <a href="group.jsp" class="sidebar-link active">Group By</a>
             <a href="charts.jsp" class="sidebar-link">Visualize Charts</a>
             <a href="correlation.jsp" class="sidebar-link">Correlation</a>
-            <a href="regression.jsp" class="sidebar-link">Linear Regression</a>
+            <a href="onehot.jsp" class="sidebar-link">One-Hot Encoding</a>
 
             <div class="sidebar-title">Dataset History</div>
             <% if (fileHistory.isEmpty()) { %>

@@ -60,7 +60,7 @@
             <a href="group.jsp" class="sidebar-link">Group By</a>
             <a href="charts.jsp" class="sidebar-link">Visualize Charts</a>
             <a href="correlation.jsp" class="sidebar-link">Correlation</a>
-            <a href="regression.jsp" class="sidebar-link active">Linear Regression</a>
+            <a href="onehot.jsp" class="sidebar-link">One-Hot Encoding</a>
 
             <div class="sidebar-title">Dataset History</div>
             <% if (fileHistory.isEmpty()) { %>
@@ -93,9 +93,8 @@
                 <p style="font-size: 12px; color: #666;">Model linear relationships between predictor X and response Y (y = mx + c)</p>
             </div>
 
-            <div class="warning-box">
-                <strong>User Responsibility:</strong>
-                DataSci performs linear regression using the columns selected by the user. It does not determine whether the selected variables have a meaningful relationship.
+            <div class="alert alert-warning" style="margin-bottom: 16px;">
+                <strong>Feature Postponed:</strong> Linear Regression analysis has been postponed in this release. Please use <a href="correlation.jsp" style="font-weight: bold; text-decoration: underline;">Correlation (Pearson r)</a> or <a href="onehot.jsp" style="font-weight: bold; text-decoration: underline;">One-Hot Encoding</a> for statistical relationship analysis and data preprocessing.
             </div>
 
             <% if (!hasData) { %>

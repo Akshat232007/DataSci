@@ -9,14 +9,18 @@ public class Correlation {
         public String colX;
         public String colY;
         public int validCount;
+        public int excludedCount;
+        public boolean isDefined;
         public double correlation;
         public String rangeDescription;
         public List<Double> xPoints;
         public List<Double> yPoints;
 
         public CorrelationResult() {
-            xPoints = new ArrayList<>();
-            yPoints = new ArrayList<>();
+            this.xPoints = new ArrayList<>();
+            this.yPoints = new ArrayList<>();
+            this.isDefined = false;
+            this.correlation = Double.NaN;
         }
     }
 
@@ -26,35 +30,45 @@ public class Correlation {
         res.colX = colX;
         res.colY = colY;
 
+        if (headers == null || dataRows == null || colX == null || colY == null) {
+            res.rangeDescription = "Invalid dataset or columns specified.";
+            return res;
+        }
+
         int indexX = headers.indexOf(colX);
         int indexY = headers.indexOf(colY);
 
-        if (indexX == -1 || indexY == -1 || dataRows == null) {
+        if (indexX == -1 || indexY == -1) {
+            res.rangeDescription = "One or both selected columns not found in dataset.";
             return res;
         }
 
         List<Double> xList = new ArrayList<>();
         List<Double> yList = new ArrayList<>();
+        int excluded = 0;
 
         for (List<String> row : dataRows) {
-            if (indexX < row.size() && indexY < row.size()) {
-                String valX = row.get(indexX);
-                String valY = row.get(indexY);
+            String valX = (indexX < row.size()) ? row.get(indexX) : null;
+            String valY = (indexY < row.size()) ? row.get(indexY) : null;
 
-                if (ReadData.isNumeric(valX) && ReadData.isNumeric(valY)) {
-                    xList.add(Double.parseDouble(valX.trim()));
-                    yList.add(Double.parseDouble(valY.trim()));
-                }
+            if (!ReadData.isValueMissing(valX) && !ReadData.isValueMissing(valY)
+                    && ReadData.isNumeric(valX) && ReadData.isNumeric(valY)) {
+                xList.add(Double.parseDouble(valX.trim()));
+                yList.add(Double.parseDouble(valY.trim()));
+            } else {
+                excluded++;
             }
         }
 
         res.validCount = xList.size();
+        res.excludedCount = excluded;
         res.xPoints = xList;
         res.yPoints = yList;
 
         if (xList.size() < 2) {
-            res.correlation = 0.0;
-            res.rangeDescription = "Insufficient data points to calculate correlation.";
+            res.isDefined = false;
+            res.correlation = Double.NaN;
+            res.rangeDescription = "Undefined: Insufficient data points to calculate correlation (at least 2 valid pairs required).";
             return res;
         }
 
@@ -83,9 +97,11 @@ public class Correlation {
         }
 
         double denominator = Math.sqrt(denX * denY);
-        if (denominator == 0) {
-            res.correlation = 0.0;
-            res.rangeDescription = "Zero variance in one or both selected columns.";
+        // Zero variance in X or Y means correlation is strictly undefined, NOT zero
+        if (denominator <= 1e-12 || Double.isNaN(denominator)) {
+            res.isDefined = false;
+            res.correlation = Double.NaN;
+            res.rangeDescription = "Undefined: Constant values / Zero variance in one or both selected columns.";
             return res;
         }
 
@@ -93,18 +109,19 @@ public class Correlation {
         if (r > 1.0) r = 1.0;
         if (r < -1.0) r = -1.0;
 
+        res.isDefined = true;
         res.correlation = r;
 
         if (r >= 0.7) {
-            res.rangeDescription = "Strong positive linear correlation (r >= 0.70)";
+            res.rangeDescription = "Strong positive linear association (r >= 0.70)";
         } else if (r >= 0.3) {
-            res.rangeDescription = "Moderate positive linear correlation (0.30 <= r < 0.70)";
+            res.rangeDescription = "Moderate positive linear association (0.30 <= r < 0.70)";
         } else if (r > -0.3) {
-            res.rangeDescription = "Weak or no linear correlation (-0.30 < r < 0.30)";
+            res.rangeDescription = "Weak or negligible linear association (-0.30 < r < 0.30)";
         } else if (r > -0.7) {
-            res.rangeDescription = "Moderate negative linear correlation (-0.70 < r <= -0.30)";
+            res.rangeDescription = "Moderate negative linear association (-0.70 < r <= -0.30)";
         } else {
-            res.rangeDescription = "Strong negative linear correlation (r <= -0.70)";
+            res.rangeDescription = "Strong negative linear association (r <= -0.70)";
         }
 
         return res;

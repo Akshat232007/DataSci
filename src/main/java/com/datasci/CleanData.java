@@ -29,9 +29,12 @@ public class CleanData {
     }
 
     public static int fillMissingWithMean(List<String> headers, List<List<String>> dataRows, String column) {
+        if (headers == null || dataRows == null || column == null) {
+            return -1;
+        }
         int colIndex = headers.indexOf(column);
         if (colIndex == -1) {
-            return 0;
+            return -1;
         }
 
         double sum = 0;
@@ -39,15 +42,16 @@ public class CleanData {
         for (List<String> row : dataRows) {
             if (colIndex < row.size()) {
                 String val = row.get(colIndex);
-                if (ReadData.isNumeric(val)) {
+                if (!ReadData.isValueMissing(val) && ReadData.isNumeric(val)) {
                     sum += Double.parseDouble(val.trim());
                     count++;
                 }
             }
         }
 
+        // If no valid numerical values exist in the column, calculation cannot proceed
         if (count == 0) {
-            return 0;
+            return -1;
         }
 
         double mean = sum / count;
@@ -67,23 +71,27 @@ public class CleanData {
     }
 
     public static int fillMissingWithMedian(List<String> headers, List<List<String>> dataRows, String column) {
+        if (headers == null || dataRows == null || column == null) {
+            return -1;
+        }
         int colIndex = headers.indexOf(column);
         if (colIndex == -1) {
-            return 0;
+            return -1;
         }
 
         List<Double> values = new ArrayList<>();
         for (List<String> row : dataRows) {
             if (colIndex < row.size()) {
                 String val = row.get(colIndex);
-                if (ReadData.isNumeric(val)) {
+                if (!ReadData.isValueMissing(val) && ReadData.isNumeric(val)) {
                     values.add(Double.parseDouble(val.trim()));
                 }
             }
         }
 
+        // If no valid numerical values exist, calculation cannot proceed
         if (values.isEmpty()) {
-            return 0;
+            return -1;
         }
 
         Collections.sort(values);
@@ -109,13 +117,22 @@ public class CleanData {
         return filledCount;
     }
 
+    /**
+     * Fills missing categorical values with the mode.
+     * Tie-breaking rule: If multiple categories share the highest frequency, 
+     * the category that appeared earliest in the dataset is selected.
+     */
     public static int fillMissingWithMode(List<String> headers, List<List<String>> dataRows, String column) {
+        if (headers == null || dataRows == null || column == null) {
+            return -1;
+        }
         int colIndex = headers.indexOf(column);
         if (colIndex == -1) {
-            return 0;
+            return -1;
         }
 
-        Map<String, Integer> freq = new HashMap<>();
+        // LinkedHashMap preserves appearance order for deterministic tie-breaking
+        Map<String, Integer> freq = new java.util.LinkedHashMap<>();
         for (List<String> row : dataRows) {
             if (colIndex < row.size()) {
                 String val = row.get(colIndex);
@@ -127,12 +144,13 @@ public class CleanData {
         }
 
         if (freq.isEmpty()) {
-            return 0;
+            return -1;
         }
 
         String mode = "";
         int maxFreq = -1;
         for (Map.Entry<String, Integer> entry : freq.entrySet()) {
+            // Strict inequality (>) preserves earliest-encountered category on tie
             if (entry.getValue() > maxFreq) {
                 maxFreq = entry.getValue();
                 mode = entry.getKey();
@@ -166,15 +184,31 @@ public class CleanData {
     }
 
     public static boolean renameColumn(List<String> headers, String oldName, String newName) {
+        if (headers == null || oldName == null || newName == null) {
+            return false;
+        }
+        String cleanNew = newName.trim();
+        if (cleanNew.isEmpty()) {
+            return false;
+        }
+        // Reject if target name already exists (prevents duplicate column names)
+        for (String h : headers) {
+            if (h.equalsIgnoreCase(cleanNew) && !h.equalsIgnoreCase(oldName)) {
+                return false;
+            }
+        }
         int index = headers.indexOf(oldName);
-        if (index != -1 && newName != null && !newName.trim().isEmpty()) {
-            headers.set(index, newName.trim());
+        if (index != -1) {
+            headers.set(index, cleanNew);
             return true;
         }
         return false;
     }
 
     public static boolean deleteColumn(List<String> headers, List<List<String>> dataRows, String column) {
+        if (headers == null || dataRows == null || column == null) {
+            return false;
+        }
         int index = headers.indexOf(column);
         if (index == -1) {
             return false;

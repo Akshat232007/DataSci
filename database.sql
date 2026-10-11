@@ -1,4 +1,19 @@
+-- ============================================================
+-- DataSci — Visual Data Processing and Analysis Platform
+-- Database Initialization Script
+-- Compatible with: MySQL 8.0+, TiDB Cloud Serverless
+-- Target Database: datasci
+-- ============================================================
 
+-- 1. Create and select the database
+CREATE DATABASE IF NOT EXISTS datasci
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE datasci;
+
+-- 2. Users Table
+-- Stores credentials, role (ADMIN or USER), and status (ACTIVE or INACTIVE)
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -9,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 3. History Table
+-- Audit trail of major analytical actions and operations per user
 CREATE TABLE IF NOT EXISTS history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -19,6 +36,8 @@ CREATE TABLE IF NOT EXISTS history (
         REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- 4. Activity Table
+-- Stores metadata of uploaded datasets, operations, and row/column counts
 CREATE TABLE IF NOT EXISTS activity (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -32,8 +51,21 @@ CREATE TABLE IF NOT EXISTS activity (
         REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Verify the schema after running:
+-- 5. Default Administrator Account (Safe / Idempotent Provisioning)
+-- Email: admin@datasci.com
+-- Initial Default Password: Admin@12345
+-- SHA-256 Hash of Admin@12345: 6f2cb9dd8f4b65e24e1c3f3fa5bc57982349237f11abceacd45bbcb74d621c25
+INSERT IGNORE INTO users (name, email, password, role, status)
+VALUES (
+    'Administrator',
+    'admin@datasci.com',
+    '6f2cb9dd8f4b65e24e1c3f3fa5bc57982349237f11abceacd45bbcb74d621c25',
+    'ADMIN',
+    'ACTIVE'
+);
+
+-- ============================================================
+-- Verification Queries (Run manually to confirm setup):
 -- SHOW TABLES;
--- DESCRIBE users;
--- DESCRIBE history;
--- DESCRIBE activity;
+-- SELECT id, name, email, role, status FROM users;
+-- ============================================================

@@ -53,7 +53,7 @@
             <a href="stats.jsp" class="sidebar-link">Statistics</a>
             <a href="charts.jsp" class="sidebar-link">Visualize Charts</a>
             <a href="correlation.jsp" class="sidebar-link">Correlation</a>
-            <a href="regression.jsp" class="sidebar-link">Linear Regression</a>
+            <a href="onehot.jsp" class="sidebar-link">One-Hot Encoding</a>
             <a href="history.jsp" class="sidebar-link">History</a>
         </div>
 

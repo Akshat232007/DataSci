@@ -60,7 +60,6 @@
             <a href="group.jsp" class="sidebar-link">Group By</a>
             <a href="charts.jsp" class="sidebar-link">Visualize Charts</a>
             <a href="correlation.jsp" class="sidebar-link active">Correlation</a>
-            <a href="regression.jsp" class="sidebar-link">Linear Regression</a>
 
             <div class="sidebar-title">Dataset History</div>
             <% if (fileHistory.isEmpty()) { %>
@@ -149,25 +148,36 @@
                     <div class="box">
                         <div class="box-header">
                             <div class="box-title">Correlation Result: <%= result.colX %> vs <%= result.colY %></div>
-                            <span class="box-desc">Sample size: <%= result.validCount %> pairs</span>
+                            <span class="box-desc"><%= result.validCount %> valid pairs used &bull; <%= result.excludedCount %> invalid/missing pairs excluded</span>
                         </div>
 
                         <div class="stat-row">
-                            <div class="stat-item stat-blue">
+                            <div class="stat-item <%= result.isDefined ? "stat-blue" : "stat-red" %>">
                                 <div class="stat-item-label">Pearson r</div>
-                                <div class="stat-item-val" style="color: #2563eb;"><%= String.format("%.4f", result.correlation) %></div>
-                                <div class="stat-item-sub">Range: -1.0 to +1.0</div>
+                                <div class="stat-item-val" style="<%= result.isDefined ? "color: #2563eb;" : "color: #dc2626;" %>">
+                                    <%= result.isDefined ? String.format("%.4f", result.correlation) : "Undefined" %>
+                                </div>
+                                <div class="stat-item-sub"><%= result.isDefined ? "Range: -1.0 to +1.0" : "Non-computable" %></div>
                             </div>
                             <div class="stat-item stat-green" style="grid-column: span 2;">
-                                <div class="stat-item-label">Range Description</div>
-                                <div class="stat-item-val" style="font-size: 15px; margin-top: 6px; color: #059669;"><%= result.rangeDescription %></div>
-                                <div class="stat-item-sub">Mathematical category only</div>
+                                <div class="stat-item-label">Interpretation</div>
+                                <div class="stat-item-val" style="font-size: 14px; margin-top: 6px; color: #059669;"><%= result.rangeDescription %></div>
+                                <div class="stat-item-sub">Mathematical linear pattern only</div>
                             </div>
                             <div class="stat-item stat-amber">
                                 <div class="stat-item-label">Shared Variance (r²)</div>
-                                <div class="stat-item-val" style="color: #d97706;"><%= String.format("%.4f", Math.pow(result.correlation, 2)) %></div>
-                                <div class="stat-item-sub"><%= String.format("%.1f%%", Math.pow(result.correlation, 2) * 100) %></div>
+                                <div class="stat-item-val" style="color: #d97706;">
+                                    <%= result.isDefined ? String.format("%.4f", Math.pow(result.correlation, 2)) : "N/A" %>
+                                </div>
+                                <div class="stat-item-sub">
+                                    <%= result.isDefined ? String.format("%.1f%%", Math.pow(result.correlation, 2) * 100) : "N/A" %>
+                                </div>
                             </div>
+                        </div>
+
+                        <div class="alert alert-info" style="margin-top: 10px; margin-bottom: 14px;">
+                            <strong>Statistical Association Note:</strong>
+                            Pearson correlation evaluates linear association between two variables. <em>Correlation does not establish, prove, or imply cause and effect.</em>
                         </div>
 
                         <div class="box-title" style="margin-bottom: 8px; font-size: 13px;">Scatter Plot</div>
@@ -200,7 +210,7 @@
                             type: 'scatter',
                             data: {
                                 datasets: [{
-                                    label: '<%= result.colX %> vs <%= result.colY %> (r = <%= String.format("%.4f", result.correlation) %>)',
+                                    label: '<%= result.colX %> vs <%= result.colY %> (<%= result.isDefined ? ("r = " + String.format("%.4f", result.correlation)) : "Undefined" %>)',
                                     data: correlationPoints,
                                     backgroundColor: '#2563eb'
                                 }]
@@ -241,16 +251,19 @@
                                     <td style="text-align: left;"><strong><%= rCol %></strong></td>
                                     <% 
                                         for (String cCol : numCols) { 
-                                            double rVal = 1.0;
-                                            if (!rCol.equals(cCol)) {
-                                                Correlation.CorrelationResult pair = Correlation.calculate(headers, rows, rCol, cCol);
-                                                rVal = pair.correlation;
-                                            }
+                                            if (rCol.equals(cCol)) {
                                     %>
-                                        <td style="<%= rCol.equals(cCol) ? "background-color: #f1f3f4; font-weight:bold;" : "" %>">
-                                            <%= String.format("%.3f", rVal) %>
+                                        <td style="background-color: #f1f3f4; font-weight:bold;">1.000</td>
+                                    <% 
+                                            } else {
+                                                Correlation.CorrelationResult pair = Correlation.calculate(headers, rows, rCol, cCol);
+                                    %>
+                                        <td>
+                                            <%= pair.isDefined ? String.format("%.3f", pair.correlation) : "Undefined" %>
                                         </td>
-                                    <% } %>
+                                    <%      }
+                                        } 
+                                    %>
                                 </tr>
                                 <% } %>
                             </tbody>

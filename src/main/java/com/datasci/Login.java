@@ -50,7 +50,22 @@ public class Login extends HttpServlet {
                             return;
                         }
 
+                        // Rotate session ID to prevent session fixation attacks
+                        request.changeSessionId();
                         HttpSession session = request.getSession(true);
+
+                        // Clear any previous unauthenticated session data
+                        session.removeAttribute("dataset_headers");
+                        session.removeAttribute("dataset_rows");
+                        session.removeAttribute("current_file_path");
+                        session.removeAttribute("current_file_name");
+                        session.removeAttribute("active_file_id");
+                        session.removeAttribute("filtered_rows");
+                        session.removeAttribute("filter_info");
+                        session.removeAttribute("correlation_result");
+                        session.removeAttribute("encoded_rows");
+                        session.removeAttribute("encoded_headers");
+
                         session.setAttribute("user_id", id);
                         session.setAttribute("user_name", name);
                         session.setAttribute("user_email", email);

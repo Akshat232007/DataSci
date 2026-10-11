@@ -13,6 +13,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+
 public class ReadData {
 
     public static List<String> parseLine(String line) {
@@ -25,7 +31,13 @@ public class ReadData {
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
             if (c == '\"') {
-                inQuotes = !inQuotes;
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '\"') {
+                    // Escaped double quote ("" -> ") inside quotes
+                    current.append('\"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
             } else if (c == ',' && !inQuotes) {
                 values.add(current.toString().trim());
                 current.setLength(0);
@@ -43,9 +55,16 @@ public class ReadData {
         if (!file.exists()) {
             return records;
         }
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String line;
+            boolean firstLine = true;
             while ((line = br.readLine()) != null) {
+                if (firstLine) {
+                    firstLine = false;
+                    if (line.startsWith("\uFEFF")) {
+                        line = line.substring(1);
+                    }
+                }
                 if (line.trim().isEmpty()) {
                     continue;
                 }
@@ -65,8 +84,13 @@ public class ReadData {
     public static List<List<String>> getDataRows(List<List<String>> allRows) {
         List<List<String>> data = new ArrayList<>();
         if (allRows != null && allRows.size() > 1) {
+            int headerCount = allRows.get(0).size();
             for (int i = 1; i < allRows.size(); i++) {
-                data.add(new ArrayList<>(allRows.get(i)));
+                List<String> row = new ArrayList<>(allRows.get(i));
+                while (row.size() < headerCount) {
+                    row.add("");
+                }
+                data.add(row);
             }
         }
         return data;
@@ -109,7 +133,12 @@ public class ReadData {
             return true;
         }
         String clean = val.trim();
-        return clean.isEmpty() || clean.equalsIgnoreCase("null") || clean.equalsIgnoreCase("na") || clean.equalsIgnoreCase("n/a");
+        return clean.isEmpty() 
+            || clean.equalsIgnoreCase("null") 
+            || clean.equalsIgnoreCase("na") 
+            || clean.equalsIgnoreCase("n/a")
+            || clean.equalsIgnoreCase("nan")
+            || clean.equalsIgnoreCase("none");
     }
 
     public static List<String> getNumericalColumns(List<String> headers, List<List<String>> dataRows) {
@@ -216,7 +245,7 @@ public class ReadData {
         if (file.getParentFile() != null && !file.getParentFile().exists()) {
             file.getParentFile().mkdirs();
         }
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(file))) {
+        try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             // Write headers
             bw.write(formatCSVLine(headers));
             bw.newLine();
@@ -235,7 +264,7 @@ public class ReadData {
             if (item == null) {
                 item = "";
             }
-            if (item.contains(",") || item.contains("\"") || item.contains("\n")) {
+            if (item.contains(",") || item.contains("\"") || item.contains("\n") || item.contains("\r")) {
                 sb.append("\"").append(item.replace("\"", "\"\"")).append("\"");
             } else {
                 sb.append(item);

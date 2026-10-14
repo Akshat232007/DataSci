@@ -92,7 +92,7 @@ public class Database {
                     + "date TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                     + ")");
 
-            // Create activity table
+            // Create activity table with file_content for resilient cloud persistence
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS activity ("
                     + "id INT AUTO_INCREMENT PRIMARY KEY, "
                     + "user_id INT NOT NULL, "
@@ -101,8 +101,14 @@ public class Database {
                     + "row_count INT DEFAULT 0, "
                     + "col_count INT DEFAULT 0, "
                     + "operation VARCHAR(100) NOT NULL, "
+                    + "file_content LONGTEXT, "
                     + "date TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                     + ")");
+
+            // Ensure file_content exists if table was created in an earlier migration
+            try {
+                stmt.executeUpdate("ALTER TABLE activity ADD COLUMN file_content LONGTEXT");
+            } catch (Exception ignored) {}
         } catch (Exception e) {
             System.err.println("Database auto-init note: " + e.getMessage());
         }
@@ -180,7 +186,11 @@ public class Database {
     }
 
     public static void logActivity(int userId, String fileName, String filePath, int rowCount, int colCount, String operation) {
-        String query = "INSERT INTO activity (user_id, file_name, file_path, row_count, col_count, operation) VALUES (?, ?, ?, ?, ?, ?)";
+        logActivity(userId, fileName, filePath, rowCount, colCount, operation, null);
+    }
+
+    public static void logActivity(int userId, String fileName, String filePath, int rowCount, int colCount, String operation, String fileContent) {
+        String query = "INSERT INTO activity (user_id, file_name, file_path, row_count, col_count, operation, file_content) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection con = getConnection();
              PreparedStatement ps = con.prepareStatement(query)) {
             ps.setInt(1, userId);
@@ -189,6 +199,7 @@ public class Database {
             ps.setInt(4, rowCount);
             ps.setInt(5, colCount);
             ps.setString(6, operation);
+            ps.setString(7, fileContent);
             ps.executeUpdate();
         } catch (Exception e) {
             System.err.println("Error logging activity: " + e.getMessage());
@@ -202,6 +213,7 @@ public class Database {
         public int rowCount;
         public int colCount;
         public String date;
+        public String fileContent;
     }
 
     public static java.util.List<UploadedFile> getUploadedFiles(int userId) {
@@ -229,7 +241,7 @@ public class Database {
     }
 
     public static UploadedFile getUploadedFileById(int id, int userId) {
-        String sql = "SELECT id, file_name, file_path, row_count, col_count, date FROM activity WHERE id = ? AND user_id = ?";
+        String sql = "SELECT id, file_name, file_path, row_count, col_count, date, file_content FROM activity WHERE id = ? AND user_id = ?";
         try (Connection con = getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -243,6 +255,7 @@ public class Database {
                     uf.rowCount = rs.getInt("row_count");
                     uf.colCount = rs.getInt("col_count");
                     uf.date = rs.getString("date");
+                    uf.fileContent = rs.getString("file_content");
                     return uf;
                 }
             }
@@ -274,6 +287,20 @@ public class Database {
             ps.executeUpdate();
         } catch (Exception e) {
             System.err.println("Error updating file path: " + e.getMessage());
+        }
+    }
+
+    public static void updateFileContent(int id, int userId, String newPath, String newContent) {
+        String sql = "UPDATE activity SET file_path = ?, file_content = ? WHERE id = ? AND user_id = ?";
+        try (Connection con = getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, newPath);
+            ps.setString(2, newContent);
+            ps.setInt(3, id);
+            ps.setInt(4, userId);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            System.err.println("Error updating file content: " + e.getMessage());
         }
     }
 }

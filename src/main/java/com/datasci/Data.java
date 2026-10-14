@@ -90,6 +90,25 @@ public class Data extends HttpServlet {
         }
     }
 
+    private File getUploadDir() {
+        File[] candidates = new File[] {
+            new File(System.getProperty("user.home"), "datasci_uploads"),
+            new File(System.getProperty("java.io.tmpdir"), "datasci_uploads"),
+            new File("./datasci_uploads")
+        };
+        for (File dir : candidates) {
+            try {
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+                if (dir.exists() && dir.canWrite()) {
+                    return dir;
+                }
+            } catch (Exception ignored) {}
+        }
+        return new File(System.getProperty("java.io.tmpdir"));
+    }
+
     private void handleUpload(HttpServletRequest request, HttpServletResponse response, 
                               HttpSession session, int userId) throws IOException, ServletException {
         Part filePart = request.getPart("csvFile");
@@ -104,12 +123,8 @@ public class Data extends HttpServlet {
             return;
         }
 
-        // Prepare persistent uploads directory in user home
-        File persistentDir = new File(System.getProperty("user.home"), "datasci_uploads");
-        if (!persistentDir.exists()) {
-            persistentDir.mkdirs();
-        }
-
+        // Prepare persistent uploads directory
+        File persistentDir = getUploadDir();
         String safeFileName = "user_" + userId + "_" + System.currentTimeMillis() + "_" + submittedFileName.replaceAll("[^a-zA-Z0-9.-]", "_");
         File targetFile = new File(persistentDir, safeFileName);
 
@@ -126,7 +141,7 @@ public class Data extends HttpServlet {
             }
             try {
                 Files.copy(targetFile.toPath(), new File(webappUploadsDir, safeFileName).toPath(), StandardCopyOption.REPLACE_EXISTING);
-            } catch (Exception e) {}
+            } catch (Exception ignored) {}
         }
 
         // Read and validate CSV contents
@@ -146,6 +161,12 @@ public class Data extends HttpServlet {
             return;
         }
 
+        // Read raw file content to store in cloud database for zero-data-loss container restarts
+        String fileContent = "";
+        try {
+            fileContent = Files.readString(targetFile.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {}
+
         session.setAttribute("current_file_name", submittedFileName);
         session.setAttribute("current_file_path", targetFile.getAbsolutePath());
         session.setAttribute("dataset_headers", headers);
@@ -155,8 +176,13 @@ public class Data extends HttpServlet {
         session.removeAttribute("correlation_result");
         session.removeAttribute("regression_result");
 
-        Database.logActivity(userId, submittedFileName, targetFile.getAbsolutePath(), dataRows.size(), headers.size(), "Uploaded Dataset");
+        Database.logActivity(userId, submittedFileName, targetFile.getAbsolutePath(), dataRows.size(), headers.size(), "Uploaded Dataset", fileContent);
         Database.logHistory(userId, "Uploaded dataset", "Uploaded " + submittedFileName + " (" + dataRows.size() + " rows, " + headers.size() + " columns)");
+
+        List<Database.UploadedFile> files = Database.getUploadedFiles(userId);
+        if (!files.isEmpty()) {
+            session.setAttribute("active_file_id", files.get(0).id);
+        }
 
         response.sendRedirect("upload.jsp?msg=Dataset uploaded successfully!");
     }
@@ -264,9 +290,16 @@ public class Data extends HttpServlet {
         session.removeAttribute("encoded_rows");
         session.removeAttribute("encoded_headers");
 
-        // Sync modified dataset back to working disk file
+        // Sync modified dataset back to working disk file and cloud database
         if (filePath != null) {
             ReadData.writeCSV(filePath, headers, (List<List<String>>) session.getAttribute("dataset_rows"));
+            Integer activeFileId = (Integer) session.getAttribute("active_file_id");
+            if (activeFileId != null) {
+                try {
+                    String updatedContent = Files.readString(new File(filePath).toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                    Database.updateFileContent(activeFileId, userId, filePath, updatedContent);
+                } catch (Exception ignored) {}
+            }
         }
 
         response.sendRedirect("clean.jsp?msg=" + java.net.URLEncoder.encode(message, "UTF-8"));
@@ -534,6 +567,13 @@ public class Data extends HttpServlet {
 
             if (filePath != null) {
                 ReadData.writeCSV(filePath, result.encodedHeaders, result.encodedRows);
+                Integer activeFileId = (Integer) session.getAttribute("active_file_id");
+                if (activeFileId != null) {
+                    try {
+                        String updatedContent = Files.readString(new File(filePath).toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                        Database.updateFileContent(activeFileId, userId, filePath, updatedContent);
+                    } catch (Exception ignored) {}
+                }
             }
 
             Database.logHistory(userId, "Saved One-Hot Encoded Dataset", "Working dataset updated to " + result.encodedColumnCount + " columns");
@@ -559,10 +599,27 @@ public class Data extends HttpServlet {
             }
 
             File diskFile = new File(file.filePath);
+
+            // Cloud resilient check: If missing on disk (e.g. Render restart or different host)
             if (!diskFile.exists()) {
-                // Check fallback directories by file name
+                // 1. Restore directly from cloud database content if available!
+                if (file.fileContent != null && !file.fileContent.trim().isEmpty()) {
+                    try {
+                        File uploadDir = getUploadDir();
+                        String restoredName = "restored_" + file.id + "_" + file.fileName.replaceAll("[^a-zA-Z0-9.-]", "_");
+                        diskFile = new File(uploadDir, restoredName);
+                        Files.writeString(diskFile.toPath(), file.fileContent, java.nio.charset.StandardCharsets.UTF_8);
+                        Database.updateFilePath(fileId, userId, diskFile.getAbsolutePath());
+                    } catch (Exception e) {
+                        System.err.println("Could not restore file from database: " + e.getMessage());
+                    }
+                }
+            }
+
+            // 2. Check fallback directories by file name if still not found
+            if (!diskFile.exists()) {
                 String baseName = new File(file.filePath).getName();
-                File fallback1 = new File(new File(System.getProperty("user.home"), "datasci_uploads"), baseName);
+                File fallback1 = new File(getUploadDir(), baseName);
                 String webappUploads = getServletContext().getRealPath("/uploads");
                 File fallback2 = (webappUploads != null) ? new File(webappUploads, baseName) : null;
                 File fallback3 = new File("uploads", baseName);
@@ -582,7 +639,8 @@ public class Data extends HttpServlet {
             }
 
             if (!diskFile.exists()) {
-                response.sendRedirect("history.jsp?error=File no longer exists on server disk");
+                response.sendRedirect("history.jsp?error=" + java.net.URLEncoder.encode(
+                    "This dataset was uploaded in an earlier session before cloud sync was enabled. Please upload it again.", "UTF-8"));
                 return;
             }
 
@@ -594,6 +652,7 @@ public class Data extends HttpServlet {
             List<String> headers = ReadData.getHeaders(allRows);
             List<List<String>> dataRows = ReadData.getDataRows(allRows);
 
+            session.setAttribute("active_file_id", fileId);
             session.setAttribute("current_file_name", file.fileName);
             session.setAttribute("current_file_path", diskFile.getAbsolutePath());
             session.setAttribute("dataset_headers", headers);

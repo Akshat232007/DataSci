@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS activity (
     row_count INT DEFAULT 0,
     col_count INT DEFAULT 0,
     operation VARCHAR(100) NOT NULL,
+    file_content LONGTEXT,
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_activity_user FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE CASCADE
